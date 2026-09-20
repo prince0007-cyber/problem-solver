@@ -3,11 +3,16 @@ import OpenAI from "openai";
 
 export const runtime = "nodejs";
 
-const apiKey = process.env.OPENAI_API_KEY;
+const apiKey = process.env.OPENROUTER_API_KEY;
 
 const openai = apiKey
   ? new OpenAI({
       apiKey,
+      baseURL: "https://openrouter.ai/api/v1",
+      defaultHeaders: {
+        "HTTP-Referer": "https://problem-solver-pi.vercel.app",
+        "X-Title": "Problem Solver",
+      },
     })
   : null;
 
@@ -38,7 +43,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error:
-            "OPENAI_API_KEY is missing. Add it to your .env.local file and restart the server.",
+            "OPENROUTER_API_KEY is missing. Add it to your .env.local file and restart the server.",
         },
         { status: 500 }
       );
@@ -126,35 +131,41 @@ User's problem:
 ${problem || "The user uploaded an image. Understand the image and solve the problem shown."}
 `;
 
-    const content: Array<
-      | { type: "input_text"; text: string }
-      | { type: "input_image"; image_url: string; detail: "auto" }
+    const userContent: Array<
+      | { type: "text"; text: string }
+      | {
+          type: "image_url";
+          image_url: {
+            url: string;
+          };
+        }
     > = [
       {
-        type: "input_text",
+        type: "text",
         text: prompt,
       },
     ];
 
     if (image) {
-      content.push({
-        type: "input_image",
-        image_url: image,
-        detail: "auto",
+      userContent.push({
+        type: "image_url",
+        image_url: {
+          url: image,
+        },
       });
     }
 
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: [
+    const response = await openai.chat.completions.create({
+      model: "openrouter/free",
+      messages: [
         {
           role: "user",
-          content,
+          content: userContent,
         },
       ],
     });
 
-    const output = response.output_text?.trim();
+    const output = response.choices[0]?.message?.content?.trim();
 
     if (!output) {
       return NextResponse.json(
